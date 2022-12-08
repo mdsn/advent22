@@ -68,8 +68,7 @@ fn main() -> Result<(), Box<dyn Error>> {
             _ => {
                 let size = str::parse::<u32>(tokens[0]).unwrap();
                 for prefix in prefixes(&cwd) {
-                    let k = sizes.entry(prefix).or_default();
-                    *k += size;
+                    *sizes.entry(prefix).or_default() += size;
                 }
             }
         }
