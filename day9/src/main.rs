@@ -47,16 +47,13 @@ fn pull_rope(rope: &mut [P], d: &D) {
         _ => unreachable!(),
     };
     for i in 0..rope.len() - 1 {
-        let mut tail = rope[i + 1];
-        pull_tail(&rope[i], &mut tail);
-        rope[i + 1] = tail;
-    }
-}
-
-fn pull_tail(h: &P, t: &mut P) {
-    if !adjacent(h, t) {
-        let (dx, dy) = (h.x - t.x, h.y - t.y);
-        *t += (dx.signum(), dy.signum());
+        let (h, t) = rope.split_at_mut(i + 1);
+        let h = &h[i];
+        let t = &mut t[0];
+        if !adjacent(h, t) {
+            let (dx, dy) = (h.x - t.x, h.y - t.y);
+            *t += (dx.signum(), dy.signum());
+        }
     }
 }
 
