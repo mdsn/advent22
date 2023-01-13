@@ -372,7 +372,6 @@ fn main() {
                 let key = (chamber.top_formation(), rock.poly as u8, jet_idx);
                 jet_idx = (jet_idx + 1) % jets.len();
 
-
                 if let Entry::Vacant(e) = seen.entry(key) {
                     e.insert((i, chamber.rock_height));
                 } else {

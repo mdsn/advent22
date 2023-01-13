@@ -1,4 +1,4 @@
-use std::collections::{HashMap, HashSet, VecDeque};
+use std::collections::{HashSet, VecDeque};
 use std::io;
 use std::io::prelude::*;
 
@@ -18,7 +18,9 @@ fn adjacent_positions(pos: Pos) -> Vec<Pos> {
     for [x0, y0, z0] in faces
         .iter()
         .map(|[dx, dy, dz]| [x as i8 - dx, y as i8 - dy, z as i8 - dz])
-        .filter(|[x0, y0, z0]| *x0 >= 0 && *y0 >= 0 && *z0 >= 0)
+        .filter(|[x0, y0, z0]| {
+            *x0 >= 0 && *y0 >= 0 && *z0 >= 0 && *x0 <= 20 && *y0 <= 20 && *z0 <= 20
+        })
     {
         neighbors.push([x0 as u8, y0 as u8, z0 as u8]);
     }
@@ -27,14 +29,12 @@ fn adjacent_positions(pos: Pos) -> Vec<Pos> {
 
 fn neighbors(grid: &HashSet<Pos>, pos: Pos) -> Vec<Pos> {
     let mut neighbors = vec![];
-    // if grid.contains(&pos) {
     for neighbor in adjacent_positions(pos)
         .into_iter()
         .filter(|[x0, y0, z0]| grid.contains(&[*x0, *y0, *z0]))
     {
         neighbors.push(neighbor);
     }
-    // }
 
     neighbors
 }
@@ -52,53 +52,30 @@ fn main() {
         grid.insert(cube);
     }
 
-    let mut counters = HashMap::new();
-    for cube in &grid {
-        let open_faces = 6 - neighbors(&grid, *cube).len();
-        counters.insert(cube, open_faces);
-    }
-
-    let total: usize = counters.values().sum();
+    let total: usize = grid.iter().map(|qb| 6 - neighbors(&grid, *qb).len()).sum();
     dbg!(total);
 
-    // idea: 3D flood fill.
-    // list all adjacents. take one, flood fill with bfs, if it hits boundaries it's outside.
-    // flood fill:
-    //  take one from adjacent, mark it as visited, queue all neighbors not in grid. Repeat for
-    //  each neighbor. If we hit boundaries, there is an open path from original adjacent to
-    //  outside; mark all visited as "outside". Note that all visited are connected to it so are
-    //  also open to the outside, so none of them are trapped.
-    //
-    //  if a flood fill runs out of neighbors without hitting boundaries, we have found a trapped
-    //  pocket of air. Mark these nodes as "trapped".
-    //
-    //  if there are still nodes in `adjacent` not in `visited` or `trapped`, take one and run
-    //  flood fill again.
-    //
-    //  once there are no more nodes in `adjacent` that aren't `outside` or `trapped`, we have
-    //  effectively checked all the empty spaces around the grid. Take the intersection between the
-    //  `trapped` nodes and the original `adjacent` nodes to get the cubes touching the trapped
-    //  faces.
+    // 3D flood fill
     let adjacent: HashSet<Pos> = HashSet::from_iter(grid.iter().flat_map(|q| {
         adjacent_positions(*q)
             .into_iter()
             .filter(|adj| !grid.contains(adj))
     }));
-    let mut outside = HashSet::new();
+    let mut trapped = HashSet::new();
     let mut all_visited = HashSet::new();
     let mut queue = VecDeque::new();
 
     loop {
+        let mut outside = false;
         let mut visited = HashSet::new();
+
         // if adjacent - all_visited is empty, there are no more adjacents to check, break.
         if adjacent.difference(&all_visited).next().is_none() {
             break;
         }
 
-        // take arbitrary cube from adjacent that is not `all_visited`
+        // take arbitrary cube from adjacent that is not `all_visited` and queue it
         let cube = adjacent.iter().find(|q| !all_visited.contains(*q)).unwrap();
-
-        // put it in the queue
         queue.push_back(*cube);
         while !queue.is_empty() {
             let qb = queue.pop_front().unwrap();
@@ -108,13 +85,7 @@ fn main() {
 
             // if it touches the boundaries at 0 or 20
             if qb.iter().any(|xyz| *xyz == 0 || *xyz >= 20) {
-                // mark visited as `outside`, clear visited
-                visited.drain().for_each(|q| {
-                    assert!(!outside.contains(&q));
-                    outside.insert(q);
-                });
-                queue.clear();
-                break;
+                outside = true;
             }
 
             // take every non-visited+non-all_visited neighbor that is not in the grid, queue them
@@ -129,19 +100,16 @@ fn main() {
                 }
             }
         }
-    }
 
-    // once we broke from the loop, adjacent - outside are the adjacent cubes that are trapped
-    let trapped: HashSet<&Pos> = adjacent.difference(&outside).collect();
+        if !outside {
+            visited.drain().for_each(|q| {
+                trapped.insert(q);
+            });
+        }
+    }
 
     // count faces of `trapped` that touch cubes in `grid`, subtract from `total`, report. The end
-    counters.clear();
-    for cube in trapped {
-        let closed_faces = neighbors(&grid, *cube).len();
-        counters.insert(cube, closed_faces);
-    }
-
-    let closed: usize = counters.values().sum();
+    let closed: usize = trapped.iter().map(|qb| neighbors(&grid, *qb).len()).sum();
     dbg!(total - closed);
 }
 
