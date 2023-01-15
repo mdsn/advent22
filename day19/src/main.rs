@@ -175,24 +175,31 @@ fn main() {
         });
     }
 
-    let result: u32 = blueprints.into_par_iter().map(|blueprint| {
-        let ctx = Ctx {
-            blueprint,
-            robots: Counters {
-                ore: 1,
-                ..Default::default()
-            },
-            resources: Default::default(),
-            time_left: 32,
-        };
+    let result: u32 = blueprints
+        .into_par_iter()
+        .map(|blueprint| {
+            let ctx = Ctx {
+                blueprint,
+                robots: Counters {
+                    ore: 1,
+                    ..Default::default()
+                },
+                resources: Default::default(),
+                time_left: 32,
+            };
 
-        let max_geodes: u32 = NEXT_BUILDS.par_iter().map(|next| {
-            let new_ctx = ctx.clone();
-            recurse(new_ctx, *next)
-        }).max().unwrap();
+            let max_geodes: u32 = NEXT_BUILDS
+                .par_iter()
+                .map(|next| {
+                    let new_ctx = ctx.clone();
+                    recurse(new_ctx, *next)
+                })
+                .max()
+                .unwrap();
 
-        println!("Ran blueprint. Max geodes: {max_geodes}");
-        max_geodes
-    }).product();
+            println!("Ran blueprint. Max geodes: {max_geodes}");
+            max_geodes
+        })
+        .product();
     dbg!(result);
 }
