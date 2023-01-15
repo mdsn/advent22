@@ -1,3 +1,4 @@
+use rayon::prelude::*;
 use std::io;
 use std::io::prelude::*;
 
@@ -31,16 +32,22 @@ fn recurse(mut ctx: Ctx, next: [u32; 4]) -> u32 {
     if ctx.time_left == 0 {
         return ctx.resources.geode;
     }
+
     let mut built = false;
     if enough_resources(&ctx.resources, &ctx.blueprint, &next) {
         built = true;
         start_build(&mut ctx, &next);
+    } else if !enough_time(&ctx, &next) {
+        let last_geodes = ctx.robots.geode * ctx.time_left;
+        return ctx.resources.geode + last_geodes;
     }
+
     collect_resources(&mut ctx);
+
     if built {
         update_robots(&mut ctx, &next);
         let mut max_geodes = 0;
-        for next in NEXT_BUILDS.iter() {
+        for next in &NEXT_BUILDS {
             let mut new_ctx = ctx.clone();
             new_ctx.time_left -= 1;
             let geodes = recurse(new_ctx, *next);
@@ -52,6 +59,38 @@ fn recurse(mut ctx: Ctx, next: [u32; 4]) -> u32 {
         let mut new_ctx = ctx.clone();
         new_ctx.time_left -= 1;
         recurse(new_ctx, next)
+    }
+}
+
+fn enough_time(ctx: &Ctx, next: &[u32; 4]) -> bool {
+    match *next {
+        [1, 0, 0, 0] => {
+            let needed_ore = ctx.blueprint.ore - ctx.resources.ore;
+            let needed_time = 1 + (needed_ore as f32 / ctx.robots.ore as f32).ceil() as u32;
+            needed_time <= ctx.time_left
+        }
+        [0, 1, 0, 0] => {
+            let needed_ore = ctx.blueprint.clay - ctx.resources.ore;
+            let needed_time = 1 + (needed_ore as f32 / ctx.robots.ore as f32).ceil() as u32;
+            needed_time <= ctx.time_left
+        }
+        [0, 0, 1, 0] => {
+            let needed_ore = ctx.blueprint.obsidian.0.saturating_sub(ctx.resources.ore);
+            let needed_clay = ctx.blueprint.obsidian.1.saturating_sub(ctx.resources.clay);
+            let ore_time = (needed_ore as f32 / ctx.robots.ore as f32).ceil() as u32;
+            let clay_time = (needed_clay as f32 / ctx.robots.clay as f32).ceil() as u32;
+            let needed_time = 1u32.saturating_add(ore_time.max(clay_time));
+            needed_time <= ctx.time_left
+        }
+        [0, 0, 0, 1] => {
+            let needed_ore = ctx.blueprint.geode.0.saturating_sub(ctx.resources.ore);
+            let needed_obs = ctx.blueprint.geode.1.saturating_sub(ctx.resources.obsidian);
+            let ore_time = (needed_ore as f32 / ctx.robots.ore as f32).ceil() as u32;
+            let obs_time = (needed_obs as f32 / ctx.robots.obsidian as f32).ceil() as u32;
+            let needed_time = 1u32.saturating_add(ore_time.max(obs_time));
+            needed_time <= ctx.time_left
+        }
+        _ => unreachable!(),
     }
 }
 
@@ -117,7 +156,7 @@ fn enough_resources(resources: &Counters, blueprint: &Blueprint, next: &[u32; 4]
 fn main() {
     let handle = io::stdin().lock();
     let mut blueprints = vec![];
-    for line in handle.lines().map(Result::unwrap) {
+    for line in handle.lines().map(Result::unwrap).take(3) {
         let costs: Vec<_> = line
             .split(&[':', '.'])
             .skip(1)
@@ -136,8 +175,7 @@ fn main() {
         });
     }
 
-    let mut total_quality = 0;
-    for (id, blueprint) in blueprints.into_iter().enumerate() {
+    let result: u32 = blueprints.into_par_iter().map(|blueprint| {
         let ctx = Ctx {
             blueprint,
             robots: Counters {
@@ -145,16 +183,16 @@ fn main() {
                 ..Default::default()
             },
             resources: Default::default(),
-            time_left: 24,
+            time_left: 32,
         };
-        let mut max_geodes = 0;
-        for next in NEXT_BUILDS.iter() {
-            let new_ctx = ctx.clone();
-            let geodes = recurse(new_ctx, *next);
-            max_geodes = max_geodes.max(geodes);
-        }
 
-        total_quality += (id as u32 + 1) * max_geodes;
-    }
-    dbg!(total_quality);
+        let max_geodes: u32 = NEXT_BUILDS.par_iter().map(|next| {
+            let new_ctx = ctx.clone();
+            recurse(new_ctx, *next)
+        }).max().unwrap();
+
+        println!("Ran blueprint. Max geodes: {max_geodes}");
+        max_geodes
+    }).product();
+    dbg!(result);
 }
