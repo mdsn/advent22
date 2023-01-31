@@ -36,6 +36,30 @@ struct Time {
 }
 
 impl Time {
+    fn tick(&mut self) {
+        // pass one minute. push a new timeslice and update all blizzards positions
+        let blizzards = self
+            .slices
+            .last()
+            .unwrap()
+            .blizzards
+            .iter()
+            .map(|b| {
+                let (x0, y0) = b.pos;
+                Blizzard {
+                    pos: match b.dir {
+                        Dir::U => (x0, if y0 == 0 { self.height - 1 } else { y0 - 1 }),
+                        Dir::D => (x0, (y0 + 1) % self.height),
+                        Dir::L => (if x0 == 0 { self.width - 1 } else { x0 - 1 }, y0),
+                        Dir::R => ((x0 + 1) % self.width, y0),
+                    },
+                    dir: b.dir,
+                }
+            })
+            .collect::<HashSet<_>>();
+        self.slices.push(TimeSlice { blizzards });
+    }
+
     fn print_t(&self, t: usize) {
         assert!(t < self.slices.len());
         let slice = &self.slices[t];
@@ -106,11 +130,9 @@ fn main() {
         }
     }
 
-    let time = Time {
+    let mut time = Time {
         width,
         height,
         slices: vec![TimeSlice { blizzards }],
     };
-
-    time.print_last();
 }
