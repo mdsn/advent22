@@ -138,46 +138,57 @@ fn main() {
     };
 
     let mut seen = HashSet::new();
-    let part1 = dfs(&mut time, START, 0, &mut seen);
+
+    let mut do_it = |start: (i32, i32), target: (i32, i32), t: usize| -> usize {
+        seen.clear();
+        dfs(&mut time, start, start, target, t, &mut seen)
+    };
+
+    let part1 = do_it((0, -1), (width - 1, height - 1), 0);
     dbg!(part1);
+    let time_back = do_it((width - 1, height), (0, 0), part1);
+    let part2 = do_it((0, -1), (width - 1, height - 1), time_back);
+    dbg!(part2);
 }
 
-const START: (i32, i32) = (0, -1);
-
-fn dfs(time: &mut Time, pos: (i32, i32), t: usize, seen: &mut HashSet<(i32, i32, usize)>) -> usize {
+fn dfs(
+    time: &mut Time,
+    start: (i32, i32),
+    pos: (i32, i32),
+    target: (i32, i32),
+    t: usize,
+    seen: &mut HashSet<(i32, i32, usize)>,
+) -> usize {
     let (x, y) = pos;
+    assert!(time.slices[t].blizzard_at(x, y).is_none());
     seen.insert((x, y, t));
 
-    assert!(time.slices[t].blizzard_at(x, y).is_none());
-
-    // hard stop at t = 500 not to blow the stack
-    if t == 500 {
+    // hard stop at t = 2000 not to blow the stack
+    if t == 2000 {
         return usize::MAX;
     }
 
-    // are we on target yet?
-    if x == time.width - 1 && y == time.height - 1 {
+    if pos == target {
         return t + 1;
     }
 
-    // if we don't have the next time slice yet, tick
     if t == time.slices.len() - 1 {
         time.tick();
     }
 
-    // call dfs on each available neighbor at t + 1
+    // dfs on each available neighbor at t + 1
     let next_slice = &time.slices[t + 1];
-    // available neighbors, two cases
-    // - if pos == START: if (0, 0, t+1) is available, take it, otherwise take (0, -1, t+1).
-    let neighbors = if pos == START {
-        if next_slice.blizzard_at(0, 0).is_none() {
-            vec![(0, 0)]
-        } else {
-            vec![(0, -1)]
+    let neighbors = if pos == start {
+        let (x0, y0) = match start {
+            (0, -1) => (0, 0),
+            _ => (time.width - 1, time.height - 1),
+        };
+        match next_slice.blizzard_at(x0, y0) {
+            None => vec![(x0, y0), start],
+            Some(_) => vec![start],
         }
-    // - otherwise, 4-directional neighbors at t+1 plus current position at t+1
     } else {
-        let directions: Vec<(i32, i32)> = [(-1, 0), (0, -1), (0, 1), (1, 0), (0, 0)]
+        [(-1, 0), (0, -1), (0, 1), (1, 0), (0, 0)]
             .into_iter()
             .filter_map(|(dx, dy)| {
                 let (x0, y0) = (x + dx, y + dy);
@@ -193,21 +204,12 @@ fn dfs(time: &mut Time, pos: (i32, i32), t: usize, seen: &mut HashSet<(i32, i32,
                     Some((x0, y0))
                 }
             })
-            .collect();
-        // no available moves, bail
-        if directions.is_empty() {
-            return usize::MAX;
-        } else {
-            directions
-        }
+            .collect()
     };
 
     neighbors
         .into_iter()
-        .map(|(x0, y0)| dfs(time, (x0, y0), t + 1, seen))
+        .map(|(x0, y0)| dfs(time, start, (x0, y0), target, t + 1, seen))
         .min()
-        .unwrap()
+        .unwrap_or(usize::MAX)
 }
-
-// That's not the right answer; your answer is too low. Curiously, it's the right answer for
-// someone else; you might be logged in to the wrong account or just unlucky. (You guessed 238.)
